@@ -1,2 +1,70 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.venv.bak/
+
+# Pipenv / poetry / Hatch
+Pipfile.lock
+poetry.lock
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+*.iml
+
+# dotenv
 .env
-.chat_app_messages.sqlite
+.env.*
+
+# mypy / pyright
+.mypy_cache/
+.pyright/
+
+# pytest
+.pytest_cache/
+.cache/
+
+# coverage
+htmlcov/
+.coverage
+.coverage.*
+
+# Logs
+*.log
+
+# Database or local data
+*.sqlite3
+*.db
+*.sqlite
+*.log
+
+# macOS / Windows / Linux system files
+.DS_Store
+Thumbs.db
+
+# Optional: ignore your compiled TypeScript or frontend assets
+*.tsbuildinfo
+node_modules/
+dist/
+
+
+
