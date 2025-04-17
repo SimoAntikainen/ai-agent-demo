@@ -127,12 +127,23 @@ async def search_the_internet(
         ctx: Context that includes httpx client and other deps.
         url: URL of the website to fetch.
     """
+    
+    try:
+        r = await ctx.deps.client.get(url)
+        r.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status in {401, 403}:
+            # Do not retry — bot blocked
+            return "Could not search the web page (unauthorized or blocked)."
+        else:
+            # Retryable error
+            raise ModelRetry(f"Server error {status}, trying again...") from e
+    except httpx.RequestError as e:
+        # Network or DNS issues → retry
+        raise ModelRetry("Network error when fetching the web page.") from e
 
-    r = await ctx.deps.client.get(url)
-    r.raise_for_status()
-    data = r.text
-
-    soup = BeautifulSoup(data, "html.parser")
+    soup = BeautifulSoup(r.text, "html.parser")
     main_text = soup.get_text()
 
     if main_text:
