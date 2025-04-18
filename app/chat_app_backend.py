@@ -1,4 +1,4 @@
-"""Simple chat app example build with FastAPI.
+"""Agentic AI Demo build with FastAPI.
 Extended from https://ai.pydantic.dev/examples/chat-app/
 """
 
@@ -71,7 +71,7 @@ agent = Agent(
         "You are a helpful assistant that uses tools when your internal knowledge is insufficient or uncertain."
         "Use the `web_search` tool to find up-to-date information or verify facts using Google-style search results. "
         "Use the `search_the_internet` tool to fetch and read the actual content from a specific website URL. "
-        "It returns clean, readable text extracted from the page.\n\n"
+        "It returns clean, readable text extracted from the page. "
         "If a question involves current events, factual details, or unfamiliar websites, use these tools to assist your response."
         "Use the `call_sql_database_agent` tool to call product sales database agent to answer question on our product sales database"
     ),
@@ -90,8 +90,7 @@ sql_database_agent = Agent(
     'openai:gpt-4o',
     system_prompt=(
         "You are a helpful product sales database agent. The database is SQLite3. "
-
-        "Use the `database_schema_data` tool ONCE if you need to view the schema. "
+        "Use the `database_schema_data` tool to fetch the current database schema. "
         "Do not call it multiple times for the same query unless the schema has changed. "
         "Use the `database_query` tool to query the product sales database."
         "ALWAYS generate a complete, executable SQL SELECT statement when constructing queries. "
@@ -189,9 +188,10 @@ async def call_sql_database_agent(ctx: RunContext[Deps], question: str) -> str:
         ctx: Context that includes httpx client and other deps.
         question: Question on the product sales database from the user
     """
+    print(f"question {question}")
 
     result = await sql_database_agent.run(question, deps=ctx.deps)
-    print(result.output)
+    print(f"call_sql_database_agent answer {result.output}")
     return result.output
 
 
@@ -252,6 +252,7 @@ async def database_schema_data(ctx: RunContext[Deps]) -> DatabaseSchema:
     """
 
     schemas = get_table_schemas(DB_PATH)
+    print(schemas)
     return schemas
 
 
@@ -266,7 +267,7 @@ class InvalidRequest(BaseModel):
     error_message: str
 
 
-@sql_database_agent.tool
+@sql_database_agent.tool(retries=2)
 async def database_query(ctx: RunContext[Deps], query: str) -> Union[QueryResult, InvalidRequest]:
     """Validates that the query string is valid sqlite and safe to call against the database.
     If valid, executes the SELECT query and returns the results.
@@ -315,7 +316,7 @@ async def database_query(ctx: RunContext[Deps], query: str) -> Union[QueryResult
         )
 
     except sqlite3.Error as e:
-        return InvalidRequest(error_message=f"Invalid SQL query: {str(e)}")
+        return ModelRetry(message=f"Invalid SQL query: {str(e)}")
 
     finally:
         conn.close()
