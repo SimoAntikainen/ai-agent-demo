@@ -15,8 +15,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from typing import Annotated, Any, Callable, List, Literal, Optional, TypeVar
+from typing import Annotated, Any, Callable, List, Literal, Optional, TypeAlias, TypeVar, Union
 
+from annotated_types import MinLen
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import fastapi
@@ -25,7 +26,7 @@ import httpx
 import logfire
 from fastapi import Depends, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing_extensions import LiteralString, ParamSpec, TypedDict
 
 from pydantic_ai import Agent, ModelRetry, RunContext
@@ -38,6 +39,7 @@ from pydantic_ai.messages import (
     TextPart,
     UserPromptPart,
 )
+from pydantic_ai.usage import Usage, UsageLimits
 
 import logging
 
@@ -74,18 +76,30 @@ agent = Agent(
         "Use the `call_sql_database_agent` tool to call product sales database agent to answer question on our product sales database"
     ),
     deps_type=Deps,
-    instrument=True,
 )
 
 
 deps = Deps(client=httpx.AsyncClient(), serper_api_key=SERPER_API_KEY)
 
+usage_limits = UsageLimits(request_limit=5)
+
+
+
+#        "Use the `database_schema_data` tool to fetch the current database schema. "
 sql_database_agent = Agent(
     'openai:gpt-4o',
-    system_prompt=("Your are a helpful product sales database agent "
-                   "Use the `database_schema_data` tool to fetch the schema of the product sales database. "
-                   
+    system_prompt=(
+        "You are a helpful product sales database agent. The database is SQLite3. "
+
+        "Use the `database_schema_data` tool ONCE if you need to view the schema. "
+        "Do not call it multiple times for the same query unless the schema has changed. "
+        "Use the `database_query` tool to query the product sales database."
+        "ALWAYS generate a complete, executable SQL SELECT statement when constructing queries. "
+        "Avoid partial queries. Ensure it starts with 'SELECT ... FROM ...'. "
+        "Only use SELECT queries. Never use UPDATE, INSERT, DELETE, etc."
                    ),
+    usage=usage_limits,
+    deps_type=Deps
 )
 
 
@@ -168,14 +182,15 @@ async def search_the_internet(ctx: RunContext[Deps], url: str) -> str:
     
 
 @agent.tool
-async def call_sql_database_agent(ctx: RunContext[Deps]) -> str:
+async def call_sql_database_agent(ctx: RunContext[Deps], question: str) -> str:
     """Calls product sales database agent to answer question on our product sales database
     
     Args:
         ctx: Context that includes httpx client and other deps.
+        question: Question on the product sales database from the user
     """
 
-    result = await sql_database_agent.run(deps=ctx)
+    result = await sql_database_agent.run(question, deps=ctx.deps)
     print(result.output)
     return result.output
 
@@ -238,6 +253,72 @@ async def database_schema_data(ctx: RunContext[Deps]) -> DatabaseSchema:
 
     schemas = get_table_schemas(DB_PATH)
     return schemas
+
+
+class QueryResult(BaseModel):
+    """Response with data if SQL query was successfully executed."""
+    sql_query: Annotated[str, MinLen(1)]
+    rows: List[dict]
+    columns: List[str]
+
+class InvalidRequest(BaseModel):
+    """Response when SQL could not be generated eg. is was invalid or unsafe"""
+    error_message: str
+
+
+@sql_database_agent.tool
+async def database_query(ctx: RunContext[Deps], query: str) -> Union[QueryResult, InvalidRequest]:
+    """Validates that the query string is valid sqlite and safe to call against the database.
+    If valid, executes the SELECT query and returns the results.
+
+    Args:
+        ctx: Context that includes httpx client and other deps.
+        query: sqlite query string
+    """
+    print(f"validating and executing: {query}")
+
+    # Define keywords we don't allow (write operations)
+    unsafe_keywords = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE", "ATTACH", "DETACH"]
+    lowered_query = query.strip().lower()
+
+    # Quick security checks
+    if not lowered_query.startswith("select"):
+        return InvalidRequest(error_message="Only SELECT queries are allowed.")
+
+    if any(keyword in lowered_query for keyword in unsafe_keywords):
+        return InvalidRequest(error_message="Query contains potentially unsafe operations.")
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row  # Allows fetching results as dicts
+        cursor = conn.cursor()
+
+        # Validate the query
+        cursor.execute(f"EXPLAIN QUERY PLAN {query}")
+        cursor.fetchall()
+
+        # Execute the actual query
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+
+        # Convert sqlite3.Row to plain dicts
+        results = [dict(row) for row in rows]
+
+        print(columns)
+        print(results)
+
+        return QueryResult(
+            sql_query=query,
+            rows=results,
+            columns=columns
+        )
+
+    except sqlite3.Error as e:
+        return InvalidRequest(error_message=f"Invalid SQL query: {str(e)}")
+
+    finally:
+        conn.close()
 
 
 
