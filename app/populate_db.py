@@ -1,6 +1,5 @@
 from pathlib import Path
 import sqlite3
-from datetime import date
 
 
 THIS_DIR = Path(__file__).parent
