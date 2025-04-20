@@ -3,7 +3,7 @@ from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
 from glob import glob
-from pymilvus import Collection, CollectionSchema, FieldSchema, DataType, MilvusClient
+from pymilvus import CollectionSchema, FieldSchema, DataType, MilvusClient
 from tqdm import tqdm
 
 load_dotenv()

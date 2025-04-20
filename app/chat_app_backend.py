@@ -15,7 +15,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from typing import Annotated, Any, Callable, List, Literal, Optional, TypeAlias, TypeVar, Union
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    List,
+    Literal,
+    Optional,
+    TypeVar,
+    Union,
+)
 
 from annotated_types import MinLen
 from bs4 import BeautifulSoup
@@ -26,7 +35,9 @@ import httpx
 import logfire
 from fastapi import Depends, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field
+from openai import OpenAI
+from pydantic import BaseModel
+from pymilvus import MilvusClient
 from typing_extensions import LiteralString, ParamSpec, TypedDict
 
 from pydantic_ai import Agent, ModelRetry, RunContext
@@ -39,7 +50,7 @@ from pydantic_ai.messages import (
     TextPart,
     UserPromptPart,
 )
-from pydantic_ai.usage import Usage, UsageLimits
+from pydantic_ai.usage import UsageLimits
 
 import logging
 
@@ -50,6 +61,10 @@ DB_NAME = ".chat_app_backend.sqlite"
 DB_PATH = THIS_DIR / DB_NAME
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+
+ZILLIZ_CLUSTER_ENDPOINT = os.getenv("ZILLIZ_CLUSTER_ENDPOINT")
+ZILLIZ_TOKEN = os.getenv("ZILLIZ_TOKEN")
+COLLECTION_NAME = "ai_agent_rag"
 
 # 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
 logfire.configure(send_to_logfire="if-token-present")
@@ -62,6 +77,8 @@ logging.basicConfig(level=logging.INFO)
 @dataclass
 class Deps:
     client: AsyncClient
+    openai_client: OpenAI
+    milvus_client: MilvusClient
     serper_api_key: str | None
 
 
@@ -72,6 +89,9 @@ agent = Agent(
         "Use the `web_search` tool to find up-to-date information or verify facts using Google-style search results. "
         "Use the `search_the_internet` tool to fetch and read the actual content from a specific website URL. "
         "It returns clean, readable text extracted from the page. "
+        "Use the `retrieve_documents_from_vector_database` to fetch relevant context knowledge from a vector database. "
+        "Always call `retrieve_documents_from_vector_database` when any Milvus-related question is asked. "
+        "Do not rely solely on internal knowledge for Milvus. Fetch results from the tool and use them in your answer. "
         "If a question involves current events, factual details, or unfamiliar websites, use these tools to assist your response."
         "Use the `call_sql_database_agent` tool to call product sales database agent to answer question on our product sales database"
     ),
@@ -79,15 +99,19 @@ agent = Agent(
 )
 
 
-deps = Deps(client=httpx.AsyncClient(), serper_api_key=SERPER_API_KEY)
+milvus_client = MilvusClient(uri=ZILLIZ_CLUSTER_ENDPOINT, token=ZILLIZ_TOKEN)
+deps = Deps(
+    client=httpx.AsyncClient(),
+    openai_client=OpenAI(),
+    milvus_client=milvus_client,
+    serper_api_key=SERPER_API_KEY,
+)
 
 usage_limits = UsageLimits(request_limit=5)
 
-
-
-#        "Use the `database_schema_data` tool to fetch the current database schema. "
+# "Use the `database_schema_data` tool to fetch the current database schema. "
 sql_database_agent = Agent(
-    'openai:gpt-4o',
+    "openai:gpt-4o",
     system_prompt=(
         "You are a helpful product sales database agent. The database is SQLite3. "
         "Use the `database_schema_data` tool to fetch the current database schema. "
@@ -96,12 +120,10 @@ sql_database_agent = Agent(
         "ALWAYS generate a complete, executable SQL SELECT statement when constructing queries. "
         "Avoid partial queries. Ensure it starts with 'SELECT ... FROM ...'. "
         "Only use SELECT queries. Never use UPDATE, INSERT, DELETE, etc."
-                   ),
+    ),
     usage=usage_limits,
-    deps_type=Deps
+    deps_type=Deps,
 )
-
-
 
 
 class SearchResult(BaseModel):
@@ -178,12 +200,12 @@ async def search_the_internet(ctx: RunContext[Deps], url: str) -> str:
         return main_text[:20000]
     else:
         raise ModelRetry("Could not search the web page")
-    
+
 
 @agent.tool
 async def call_sql_database_agent(ctx: RunContext[Deps], question: str) -> str:
     """Calls product sales database agent to answer question on our product sales database
-    
+
     Args:
         ctx: Context that includes httpx client and other deps.
         question: Question on the product sales database from the user
@@ -193,6 +215,63 @@ async def call_sql_database_agent(ctx: RunContext[Deps], question: str) -> str:
     result = await sql_database_agent.run(question, deps=ctx.deps)
     print(f"call_sql_database_agent answer {result.output}")
     return result.output
+
+
+def emb_text(client: OpenAI, text):
+    return (
+        client.embeddings.create(input=text, model="text-embedding-3-small")
+        .data[0]
+        .embedding
+    )
+
+
+class MilvusEntity(BaseModel):
+    id: str
+    doc_name: Optional[str]
+    chunk_id: Optional[int]
+    text: Optional[str]
+
+
+class MilvusSearchHit(BaseModel):
+    id: str
+    distance: float
+    entity: MilvusEntity
+
+
+def parse_milvus_search_results(search_res: List[List[dict]]) -> List[MilvusSearchHit]:
+    results: List[MilvusSearchHit] = []
+    for hit_list in search_res:
+        for hit in hit_list:
+            results.append(MilvusSearchHit(**hit))
+    return results
+
+
+@agent.tool
+async def retrieve_documents_from_vector_database(
+    ctx: RunContext[Deps], query: str
+) -> List[MilvusSearchHit]:
+    """Calls Milvus vector database to retrieve relevant documents to answer question.
+        The database contains only documents on the milvus vector database
+
+        Returns a list of top-k search results from the database
+
+    Args:
+        ctx: Context that includes httpx client and other deps.
+        search: The search query
+    """
+    print(f"query milvus {query}")
+
+    search_res = ctx.deps.milvus_client.search(
+        collection_name=COLLECTION_NAME,
+        data=[emb_text(ctx.deps.openai_client, query)],
+        limit=3,  # Return top 3 results
+        search_params={"metric_type": "IP", "params": {}},  # Inner product distance
+        output_fields=["id", "doc_name", "chunk_id", "text"],
+    )
+
+    parsed_results = parse_milvus_search_results(search_res)
+
+    return parsed_results
 
 
 class ColumnSchema(BaseModel):
@@ -233,8 +312,9 @@ def get_table_schemas(db_path: str) -> DatabaseSchema:
                 type=col[2],
                 not_null=bool(col[3]),
                 default_value=col[4],
-                is_primary_key=bool(col[5])
-            ) for col in columns
+                is_primary_key=bool(col[5]),
+            )
+            for col in columns
         ]
 
         tables.append(TableSchema(table_name=table_name, columns=column_schemas))
@@ -246,7 +326,7 @@ def get_table_schemas(db_path: str) -> DatabaseSchema:
 @sql_database_agent.tool
 async def database_schema_data(ctx: RunContext[Deps]) -> DatabaseSchema:
     """Returns the current schema of the product sales database
-    
+
     Args:
         ctx: Context that includes httpx client and other deps.
     """
@@ -258,17 +338,22 @@ async def database_schema_data(ctx: RunContext[Deps]) -> DatabaseSchema:
 
 class QueryResult(BaseModel):
     """Response with data if SQL query was successfully executed."""
+
     sql_query: Annotated[str, MinLen(1)]
     rows: List[dict]
     columns: List[str]
 
+
 class InvalidRequest(BaseModel):
     """Response when SQL could not be generated eg. is was invalid or unsafe"""
+
     error_message: str
 
 
 @sql_database_agent.tool(retries=2)
-async def database_query(ctx: RunContext[Deps], query: str) -> Union[QueryResult, InvalidRequest]:
+async def database_query(
+    ctx: RunContext[Deps], query: str
+) -> Union[QueryResult, InvalidRequest]:
     """Validates that the query string is valid sqlite and safe to call against the database.
     If valid, executes the SELECT query and returns the results.
 
@@ -279,7 +364,16 @@ async def database_query(ctx: RunContext[Deps], query: str) -> Union[QueryResult
     print(f"validating and executing: {query}")
 
     # Define keywords we don't allow (write operations)
-    unsafe_keywords = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE", "ATTACH", "DETACH"]
+    unsafe_keywords = [
+        "DROP",
+        "DELETE",
+        "UPDATE",
+        "INSERT",
+        "ALTER",
+        "TRUNCATE",
+        "ATTACH",
+        "DETACH",
+    ]
     lowered_query = query.strip().lower()
 
     # Quick security checks
@@ -287,7 +381,9 @@ async def database_query(ctx: RunContext[Deps], query: str) -> Union[QueryResult
         return InvalidRequest(error_message="Only SELECT queries are allowed.")
 
     if any(keyword in lowered_query for keyword in unsafe_keywords):
-        return InvalidRequest(error_message="Query contains potentially unsafe operations.")
+        return InvalidRequest(
+            error_message="Query contains potentially unsafe operations."
+        )
 
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -309,26 +405,13 @@ async def database_query(ctx: RunContext[Deps], query: str) -> Union[QueryResult
         print(columns)
         print(results)
 
-        return QueryResult(
-            sql_query=query,
-            rows=results,
-            columns=columns
-        )
+        return QueryResult(sql_query=query, rows=results, columns=columns)
 
     except sqlite3.Error as e:
         return ModelRetry(message=f"Invalid SQL query: {str(e)}")
 
     finally:
         conn.close()
-
-
-
-
-
-
-
-
-
 
 
 @asynccontextmanager
