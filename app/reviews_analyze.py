@@ -1,4 +1,5 @@
 import os
+import sys
 from dotenv import load_dotenv
 from openai import OpenAI
 from pymilvus import MilvusClient
@@ -25,31 +26,38 @@ def get_hypothetical_answer(question: str) -> str:
     )
     return response.choices[0].message.content.strip()
 
-
 def embed_text(text):
     return openai_client.embeddings.create(
         input=text, model="text-embedding-3-small"
     ).data[0].embedding
 
-query_text = "How do people feel about Steinbeck’s portrayal of migrant workers or poverty in Mice and Men "
-hypothetical_answer = get_hypothetical_answer(query_text)
-print(f"\n💡 Hypothetical Answer:\n{hypothetical_answer}\n")
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python analyze_reviews.py '<your question here>'")
+        sys.exit(1)
 
-# --- Embed the answer instead of the raw question ---
-query_vector = embed_text(hypothetical_answer)
+    query_text = sys.argv[1]
 
-results = client.search(
-    collection_name=COLLECTION_NAME,
-    data=[query_vector],
-    limit=5,
-    output_fields=["title", "user", "score", "text"],
-)
+    hypothetical_answer = get_hypothetical_answer(query_text)
+    print(f"\n💡 Hypothetical Answer:\n{hypothetical_answer}\n")
 
-print(f"\n🔍 Results for: '{query_text}'\n")
-for res in results[0]:
-    hit = res['entity']
-    print(f"distance: {res['distance']}")
-    print(f"📚 Title: {hit['title']}")
-    print(f"👤 User: {hit['user']}")
-    print(f"⭐ Rating: {hit['score']}")
-    print(f"📝 Review: {hit['text']}...\n")
+    query_vector = embed_text(hypothetical_answer)
+
+    results = client.search(
+        collection_name=COLLECTION_NAME,
+        data=[query_vector],
+        limit=5,
+        output_fields=["title", "user", "score", "text"],
+    )
+
+    print(f"\n🔍 Results for: '{query_text}'\n")
+    for res in results[0]:
+        hit = res["entity"]
+        print(f"distance: {res['distance']}")
+        print(f"📚 Title: {hit['title']}")
+        print(f"👤 User: {hit['user']}")
+        print(f"⭐ Rating: {hit['score']}")
+        print(f"📝 Review: {hit['text']}\n")
+
+if __name__ == "__main__":
+    main()
