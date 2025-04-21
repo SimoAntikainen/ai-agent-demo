@@ -64,7 +64,7 @@ SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 
 ZILLIZ_CLUSTER_ENDPOINT = os.getenv("ZILLIZ_CLUSTER_ENDPOINT")
 ZILLIZ_TOKEN = os.getenv("ZILLIZ_TOKEN")
-COLLECTION_NAME = "ai_agent_rag"
+COLLECTION_NAME = "balanced_book_reviews" #"ai_agent_rag"
 
 # 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
 logfire.configure(send_to_logfire="if-token-present")
@@ -89,11 +89,12 @@ agent = Agent(
         "Use the `web_search` tool to find up-to-date information or verify facts using Google-style search results. "
         "Use the `search_the_internet` tool to fetch and read the actual content from a specific website URL. "
         "It returns clean, readable text extracted from the page. "
-        "Use the `retrieve_documents_from_vector_database` to fetch relevant context knowledge from a vector database. "
-        "Always call `retrieve_documents_from_vector_database` when any Milvus-related question is asked. "
-        "Do not rely solely on internal knowledge for Milvus. Fetch results from the tool and use them in your answer. "
-        "If a question involves current events, factual details, or unfamiliar websites, use these tools to assist your response."
-        "Use the `call_sql_database_agent` tool to call product sales database agent to answer question on our product sales database"
+        "Book reviews and book sales are linked by the book title. "
+        "Use the `retrieve_documents_from_vector_database` tool to find and read real book reviews from readers. "
+        "These reviews are written by readers and contain their personal opinions, summaries, and commentary. "
+        "Use this tool when someone asks about how people feel about a book, what readers think, what themes or characters are discussed, or to find specific quotes from real user reviews. "
+        "If a question involves current events, factual details, or unfamiliar websites, use these tools to assist your response. "
+        "Use the `call_sql_database_agent` tool to call book sales database agent to answer question on our book sales database "
     ),
     deps_type=Deps,
 )
@@ -113,10 +114,10 @@ usage_limits = UsageLimits(request_limit=5)
 sql_database_agent = Agent(
     "openai:gpt-4o",
     system_prompt=(
-        "You are a helpful product sales database agent. The database is SQLite3. "
+        "You are a helpful book sales database agent. The database is SQLite3. "
         "Use the `database_schema_data` tool to fetch the current database schema. "
         "Do not call it multiple times for the same query unless the schema has changed. "
-        "Use the `database_query` tool to query the product sales database."
+        "Use the `database_query` tool to query the book sales database."
         "ALWAYS generate a complete, executable SQL SELECT statement when constructing queries. "
         "Avoid partial queries. Ensure it starts with 'SELECT ... FROM ...'. "
         "Only use SELECT queries. Never use UPDATE, INSERT, DELETE, etc."
@@ -204,7 +205,7 @@ async def search_the_internet(ctx: RunContext[Deps], url: str) -> str:
 
 @agent.tool
 async def call_sql_database_agent(ctx: RunContext[Deps], question: str) -> str:
-    """Calls product sales database agent to answer question on our product sales database
+    """Calls book sales database agent to answer question on our book sales database
 
     Args:
         ctx: Context that includes httpx client and other deps.
@@ -224,11 +225,13 @@ def emb_text(client: OpenAI, text):
         .embedding
     )
 
-
 class MilvusEntity(BaseModel):
     id: str
-    doc_name: Optional[str]
-    chunk_id: Optional[int]
+    title: Optional[str]
+    authors: Optional[List[str]]
+    category: Optional[List[str]]
+    user: Optional[str]
+    score: Optional[float]
     text: Optional[str]
 
 
@@ -250,23 +253,21 @@ def parse_milvus_search_results(search_res: List[List[dict]]) -> List[MilvusSear
 async def retrieve_documents_from_vector_database(
     ctx: RunContext[Deps], query: str
 ) -> List[MilvusSearchHit]:
-    """Calls Milvus vector database to retrieve relevant documents to answer question.
-        The database contains only documents on the milvus vector database
-
+    """Calls a vector database to retrieve relevant documents to answer question.
         Returns a list of top-k search results from the database
 
     Args:
         ctx: Context that includes httpx client and other deps.
         search: The search query
     """
-    print(f"query milvus {query}")
+    print(f"query vector db: {query}")
 
     search_res = ctx.deps.milvus_client.search(
         collection_name=COLLECTION_NAME,
         data=[emb_text(ctx.deps.openai_client, query)],
-        limit=3,  # Return top 3 results
-        search_params={"metric_type": "IP", "params": {}},  # Inner product distance
-        output_fields=["id", "doc_name", "chunk_id", "text"],
+        limit=3,  # Top 3 results
+        search_params={"metric_type": "IP", "params": {}},
+        output_fields=["id", "title", "authors", "category", "user", "score", "text"],
     )
 
     parsed_results = parse_milvus_search_results(search_res)
