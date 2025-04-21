@@ -7,24 +7,21 @@ It uses *Pydantic-Ai* agents with *OpenAI GPT-4o*, *Milvus (Zilliz)* for vector 
 Agents intelligently route queries to the right tools based on context.
 
 Agent Tools:
-🔍 web_search
-Perform Google-style keyword searches using a Serper API integration.
 
-🌐 search_the_internet
-Scrape and read content from any public website URL. It returns clean, human-readable page content.
+* 🔍 web_search: Perform Google-style keyword searches using a Serper API integration.
 
-💬 reviews_vector_database
-Retrieve real book reviews written by users. These reviews are stored in a vector database (*Zilliz*) and embedded using OpenAI embeddings.
+* 🌐 search_the_internet: Scrape and read content from any public website URL. It returns clean, human-readable page content.
+
+* 💬 reviews_vector_database: Retrieve real book reviews written by users. These reviews are stored in a vector database (*Zilliz*) and embedded using OpenAI embeddings.
 Reviews include user opinions, summaries, themes, and direct quotes.
 
-📊 call_sql_database_agent
-Query a structured SQL database containing information about books, pricing, stock, and sales data.
+* 📊 call_sql_database_agent: Query a SQL database containing information about books, pricing, stock, and sales data.
 Powered by an internal agent that knows how to construct and run SQL queries against SQLite.
  
 
+## Running the project
 
-
-## Requirements
+### Requirements
 
 You need to have *Python 3.10+* installed on your system to install the neccessary packages.
 
@@ -36,7 +33,7 @@ pip install -r requirements.txt
 ```
 
 
-## API KEYS
+### API KEYS
 
 For the project to work you need the following API keys:
 * Open AI API key https://platform.openai.com/api-keys
@@ -52,12 +49,12 @@ ZILLIZ_CLUSTER_ENDPOINT=...
 ZILLIZ_TOKEN=...
 ```
 
-## Creating the ZILLIZ cluster of book reviews
+### Creating the ZILLIZ cluster of book reviews
 
 Download the Amazon book reviews dataset from
 https://www.kaggle.com/datasets/mohamedbakhet/amazon-books-reviews?resource=download 
 
-The dataset is practically a smaller subset of a larget Amazon products dataset. You can access it at
+The dataset is practically a smaller subset of a larger Amazon products dataset. You can access it at
 https://amazon-reviews-2023.github.io/ 
 
 
@@ -82,7 +79,7 @@ After that create fake sales data to be queried by the sql agent
 python reviews_fake_sql_sales.py
 ```
 
-## Running the app
+### Running the app
 
 Then Run the agent with
 ```
