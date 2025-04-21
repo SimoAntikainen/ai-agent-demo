@@ -82,24 +82,6 @@ class Deps:
     serper_api_key: str | None
 
 
-
-old_system_prompt=(
-        "You are a helpful assistant that uses tools when your internal knowledge is insufficient or uncertain."
-        "Use the `web_search` tool to find up-to-date information or verify facts using Google-style search results. "
-        "Use the `search_the_internet` tool to fetch and read the actual content from a specific website URL. "
-        "It returns clean, readable text extracted from the page. "
-        "Use the `reviews_vector_database` tool to find and read real book reviews from readers. "
-        "These reviews are written by readers and contain their personal opinions, summaries, and commentary. "
-        "Use this tool when someone asks about how people feel about a book, what readers think, what themes or characters are discussed, or to find specific quotes from real user reviews. "
-        "If a question involves current events, factual details, or unfamiliar websites, use these tools to assist your response. "
-        "Use the `call_sql_database_agent` tool to call book sales database agent to answer question on our book sales database "
-        "title field returned by `reviews_vector_database` map character by character to title field of `call_sql_database_agent` books table title. "
-        "eg. if title of the book returned by `reviews_vector_database`  is capitalized: 'OF MICE AND MEN' do not change the title when querying the book sales database "
-        "make a question like: What are the sales figures for 'OF MICE AND MEN' from our sales database?"
-        "not like: What are the sales figures for 'Of Mice and Men' from our sales database?"
-    )
-
-
 system_prompt=( 
     "You are a helpful assistant that uses tools when your internal knowledge is insufficient or uncertain.\n\n"
 
@@ -150,6 +132,19 @@ sql_database_agent = Agent(
     usage=usage_limits,
     deps_type=Deps,
 )
+
+usage_limits_critic = UsageLimits(response_tokens_limit=300)
+# literature_critic_agent is used for query rewriting  
+literature_critic_agent = Agent(
+    "openai:gpt-4o",
+    system_prompt=(
+        "You are a literary reviewer. Provide a thoughtful, hypothetical book review answering the user's question."
+        "Keep it concise, under 300 tokens. "
+    ),
+    usage=usage_limits,
+    deps_type=Deps,
+)
+
 
 
 class SearchResult(BaseModel):
@@ -278,20 +273,24 @@ def parse_milvus_search_results(search_res: List[List[dict]]) -> List[MilvusSear
 
 @agent.tool
 async def reviews_vector_database(
-    ctx: RunContext[Deps], query: str
+    ctx: RunContext[Deps], question: str
 ) -> List[MilvusSearchHit]:
     """Calls a vector database to retrieve relevant documents to answer question.
         Returns a list of top-k search results from the database
 
     Args:
         ctx: Context that includes httpx client and other deps.
-        search: The search query
+        question: User question
     """
-    print(f"query vector db: {query}")
+    print(f"query vector db: {question}")
+
+    result = await literature_critic_agent.run(question, deps=ctx.deps)
+    hypothetical_answer = result.output
+    print(f"hypothetical critic answer {hypothetical_answer}")
 
     search_res = ctx.deps.milvus_client.search(
         collection_name=COLLECTION_NAME,
-        data=[emb_text(ctx.deps.openai_client, query)],
+        data=[emb_text(ctx.deps.openai_client, hypothetical_answer)],
         limit=3,  # Top 3 results
         search_params={"metric_type": "IP", "params": {}},
         output_fields=["id", "productId","title", "authors", "category", "user", "score", "text"],
