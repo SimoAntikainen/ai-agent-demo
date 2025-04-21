@@ -252,6 +252,7 @@ def emb_text(client: OpenAI, text):
 
 class MilvusEntity(BaseModel):
     id: str
+    productId: str
     title: Optional[str]
     authors: Optional[List[str]]
     category: Optional[List[str]]
@@ -270,6 +271,7 @@ def parse_milvus_search_results(search_res: List[List[dict]]) -> List[MilvusSear
     results: List[MilvusSearchHit] = []
     for hit_list in search_res:
         for hit in hit_list:
+            print(hit)
             results.append(MilvusSearchHit(**hit))
     return results
 
@@ -292,7 +294,7 @@ async def reviews_vector_database(
         data=[emb_text(ctx.deps.openai_client, query)],
         limit=3,  # Top 3 results
         search_params={"metric_type": "IP", "params": {}},
-        output_fields=["id", "title", "authors", "category", "user", "score", "text"],
+        output_fields=["id", "productId","title", "authors", "category", "user", "score", "text"],
     )
 
     parsed_results = parse_milvus_search_results(search_res)
