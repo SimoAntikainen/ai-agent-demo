@@ -18,6 +18,8 @@ Reviews include user opinions, summaries, themes, and direct quotes.
 * 📊 call_sql_database_agent: Query a SQL database containing information about books, pricing, stock, and sales data.
 Powered by an internal agent that knows how to construct and run SQL queries against SQLite.
  
+![Example usage](./prompt.PNG)
+
 
 ## Running the project
 
@@ -112,3 +114,5 @@ a better demo. Related to it, here are some problems to solve:
 * Books with slight title differences (e.g., "Of Mice and Men" vs. "Of Mice & Men") are treated as separate entities.
 * Add fields like format, language, or edition to simulate a more realistic product catalog and enable richer queries.
 * Categories are currently stored as comma-separated strings, making them hard to filter or aggregate. 
+
+![Example on the ambiquity of prompting](./promt_ambiquity.PNG)
