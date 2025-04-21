@@ -43,27 +43,27 @@ book_counts = (
     .rename({"Id": "productId"})  # Rename here early for consistency
 )
 
-# Step 3: Sample up to 20 book Ids
-eligible_books = book_counts.sample(n=min(20, book_counts.height), seed=42)
+# Step 3: Sample up to 100 book Ids
+eligible_books = book_counts.sample(n=min(100, book_counts.height), seed=42)
 selected_ids = eligible_books["productId"].to_list()
 selected_titles = eligible_books["Title"].to_list()
 
 # Step 4: Filter reviews to just those books
 filtered_reviews = ratings_df.filter(pl.col("Id").is_in(selected_ids)).rename({"Id": "productId"})
 
-# Step 5: Limit to 10 reviews per book — with some low ratings included
+# Step 5: Limit to 30 reviews per book — with some low ratings included
 low_score_reviews = (
     filtered_reviews
     .filter(pl.col("review/score") <= 3.0)
     .group_by("productId", maintain_order=True)
-    .head(3)
+    .head(10)
 )
 
 high_score_reviews = (
     filtered_reviews
     .filter(pl.col("review/score") > 3.0)
     .group_by("productId", maintain_order=True)
-    .head(7)
+    .head(20)
 )
 
 # Combine both sets
