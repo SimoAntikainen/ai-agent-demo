@@ -114,5 +114,4 @@ a better demo. Related to it, here are some problems to solve:
 * Books with slight title differences (e.g., "Of Mice and Men" vs. "Of Mice & Men") are treated as separate entities.
 * Add fields like format, language, or edition to simulate a more realistic product catalog and enable richer queries.
 * Categories are currently stored as comma-separated strings, making them hard to filter or aggregate. 
-
-![Example on the ambiquity of prompting](./promt_ambiquity.PNG)
+* give more context to sql tables, attach examples of return table rows.
