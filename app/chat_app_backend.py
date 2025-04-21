@@ -141,7 +141,7 @@ literature_critic_agent = Agent(
         "You are a literary reviewer. Provide a thoughtful, hypothetical book review answering the user's question."
         "Keep it concise, under 300 tokens. "
     ),
-    usage=usage_limits,
+    usage=usage_limits_critic,
     deps_type=Deps,
 )
 
