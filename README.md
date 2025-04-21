@@ -51,14 +51,14 @@ ZILLIZ_TOKEN=...
 
 ### Creating the ZILLIZ cluster of book reviews
 
+follow the underlying steps (first two optional if you use the subset of data found under `app/book_reviews`)
+
 Download the Amazon book reviews dataset from
 https://www.kaggle.com/datasets/mohamedbakhet/amazon-books-reviews?resource=download 
 
 The dataset is practically a smaller subset of a larger Amazon products dataset. You can access it at
 https://amazon-reviews-2023.github.io/ 
-
-
-Then follow the underlying steps (first two optional if you use the subset of data found under `app/book_reviews`)
+ 
 ```
 #1. unpack the dataset .csv files under /app/book_reviews
 unzip archive.zip -d ./app/book_reviews
@@ -71,13 +71,11 @@ python reviews_create_collection.py
 
 #4. ask a question on the dataset to check that everything is working correctly
 python reviews_analyze.py "How do readers feel about 1984?"
-```
 
-After that create fake sales data to be queried by the sql agent
-
-```
+#5. After that create fake sales data to be queried by the sql agent
 python reviews_fake_sql_sales.py
 ```
+
 
 ### Running the app
 
@@ -89,9 +87,6 @@ uvicorn app.chat_app_backend:app --reload
 Then you can view the ai agent chat at http://localhost:8000/ 
 
 Openapi documentation is also available at http://localhost:8000/docs 
-
-
-
 
 
 
@@ -109,6 +104,11 @@ Docs:
 * * https://milvus.io/docs/quickstart.md 
 * * https://docs.zilliz.com/docs/quick-start
 
+# TODOs
 
-
-
+The created mock database from the reviews, makes for a fun demo of how to prompt sql via an llm, but its
+structure does not allow for much compilexity in the queries. You might have to scrape you own dataset to get
+a better demo. Related to it, here are some problems to solve:
+* Books with slight title differences (e.g., "Of Mice and Men" vs. "Of Mice & Men") are treated as separate entities.
+* Add fields like format, language, or edition to simulate a more realistic product catalog and enable richer queries.
+* Categories are currently stored as comma-separated strings, making them hard to filter or aggregate. 
