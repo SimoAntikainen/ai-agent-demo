@@ -88,3 +88,18 @@ document.querySelector('form').addEventListener('submit', (e) => onSubmit(e).cat
 
 // load messages on page load
 fetch('/chat/').then(onFetchResponse).catch(onError)
+
+
+document.getElementById('delete-chat-btn')?.addEventListener('click', async () => {
+  if (!confirm("Are you sure you want to delete the entire chat?")) return;
+
+  try {
+    const res = await fetch('/chat/', { method: 'DELETE' })
+    if (!res.ok) throw new Error('Failed to delete chat')
+
+    // Remove messages from DOM
+    convElement.innerHTML = ''
+  } catch (e) {
+    onError(e)
+  }
+})
