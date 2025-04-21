@@ -10,7 +10,7 @@ openai_client = OpenAI()
 
 ZILLIZ_CLUSTER_ENDPOINT = os.getenv("ZILLIZ_CLUSTER_ENDPOINT")
 ZILLIZ_TOKEN = os.getenv("ZILLIZ_TOKEN")
-COLLECTION_NAME = "balanced_book_reviews"
+COLLECTION_NAME = "book_reviews" ##"balanced_book_reviews"
 
 client = MilvusClient(uri=ZILLIZ_CLUSTER_ENDPOINT, token=ZILLIZ_TOKEN)
 
@@ -47,13 +47,14 @@ def main():
         collection_name=COLLECTION_NAME,
         data=[query_vector],
         limit=5,
-        output_fields=["title", "user", "score", "text"],
+        output_fields=["productId","title", "user", "score", "text"],
     )
 
     print(f"\n🔍 Results for: '{query_text}'\n")
     for res in results[0]:
         hit = res["entity"]
         print(f"distance: {res['distance']}")
+        print(f"📚 productId: {hit['productId']}")
         print(f"📚 Title: {hit['title']}")
         print(f"👤 User: {hit['user']}")
         print(f"⭐ Rating: {hit['score']}")

@@ -6,7 +6,7 @@ DATA_DIR = THIS_DIR / 'book_reviews'
 
 # Step 1: Load CSVs
 schema_ratings = {
-    "Id": pl.Utf8,
+    "Id": pl.Utf8,  # original column name in CSV
     "Title": pl.Utf8,
     "Price": pl.Utf8,
     "User_id": pl.Utf8,
@@ -40,36 +40,44 @@ book_counts = (
     .group_by("Id", "Title")
     .agg(pl.count("Id").alias("review_count"))
     .filter(pl.col("review_count") >= 1000)
+    .rename({"Id": "productId"})  # Rename here early for consistency
 )
 
 # Step 3: Sample up to 20 book Ids
 eligible_books = book_counts.sample(n=min(20, book_counts.height), seed=42)
-selected_ids = eligible_books["Id"].to_list()
+selected_ids = eligible_books["productId"].to_list()
 selected_titles = eligible_books["Title"].to_list()
 
 # Step 4: Filter reviews to just those books
-filtered_reviews = ratings_df.filter(pl.col("Id").is_in(selected_ids))
+filtered_reviews = ratings_df.filter(pl.col("Id").is_in(selected_ids)).rename({"Id": "productId"})
 
 # Step 5: Limit to 10 reviews per book — with some low ratings included
 low_score_reviews = (
     filtered_reviews
     .filter(pl.col("review/score") <= 3.0)
-    .group_by("Id", maintain_order=True)
-    .head(20)
+    .group_by("productId", maintain_order=True)
+    .head(3)
 )
 
 high_score_reviews = (
     filtered_reviews
     .filter(pl.col("review/score") > 3.0)
-    .group_by("Id", maintain_order=True)
-    .head(30)
+    .group_by("productId", maintain_order=True)
+    .head(7)
 )
 
 # Combine both sets
-balanced_reviews = pl.concat([low_score_reviews, high_score_reviews]).sort(["Id", "review/time"])
+balanced_reviews = pl.concat([low_score_reviews, high_score_reviews]).sort(["productId", "review/time"])
 
 # Step 6: Filter book metadata
 balanced_books = book_data_df.filter(pl.col("Title").is_in(selected_titles))
+
+# Step 6.1: Add productId to balanced_books
+balanced_books = balanced_books.join(
+    eligible_books.select(["productId", "Title"]),
+    on="Title",
+    how="left"
+)
 
 # Step 7: Join authors and categories into reviews
 balanced_reviews_with_meta = balanced_reviews.join(
@@ -82,4 +90,4 @@ balanced_reviews_with_meta = balanced_reviews.join(
 balanced_reviews_with_meta.write_csv(DATA_DIR / "balanced_reviews.csv")
 balanced_books.write_csv(DATA_DIR / "balanced_books.csv")
 
-print("Saved balanced_reviews.csv with authors & categories and balanced_books.csv")
+print("✅ Saved balanced_reviews.csv with authors & categories and balanced_books.csv with productId")

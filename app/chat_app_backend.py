@@ -64,7 +64,7 @@ SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 
 ZILLIZ_CLUSTER_ENDPOINT = os.getenv("ZILLIZ_CLUSTER_ENDPOINT")
 ZILLIZ_TOKEN = os.getenv("ZILLIZ_TOKEN")
-COLLECTION_NAME = "balanced_book_reviews" #"ai_agent_rag"
+COLLECTION_NAME = "book_reviews" ##"balanced_book_reviews" #"ai_agent_rag"
 
 # 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
 logfire.configure(send_to_logfire="if-token-present")
@@ -82,20 +82,45 @@ class Deps:
     serper_api_key: str | None
 
 
-agent = Agent(
-    "openai:gpt-4o",
-    system_prompt=(
+
+old_system_prompt=(
         "You are a helpful assistant that uses tools when your internal knowledge is insufficient or uncertain."
         "Use the `web_search` tool to find up-to-date information or verify facts using Google-style search results. "
         "Use the `search_the_internet` tool to fetch and read the actual content from a specific website URL. "
         "It returns clean, readable text extracted from the page. "
-        "Book reviews and book sales are linked by the book title. "
-        "Use the `retrieve_documents_from_vector_database` tool to find and read real book reviews from readers. "
+        "Use the `reviews_vector_database` tool to find and read real book reviews from readers. "
         "These reviews are written by readers and contain their personal opinions, summaries, and commentary. "
         "Use this tool when someone asks about how people feel about a book, what readers think, what themes or characters are discussed, or to find specific quotes from real user reviews. "
         "If a question involves current events, factual details, or unfamiliar websites, use these tools to assist your response. "
         "Use the `call_sql_database_agent` tool to call book sales database agent to answer question on our book sales database "
-    ),
+        "title field returned by `reviews_vector_database` map character by character to title field of `call_sql_database_agent` books table title. "
+        "eg. if title of the book returned by `reviews_vector_database`  is capitalized: 'OF MICE AND MEN' do not change the title when querying the book sales database "
+        "make a question like: What are the sales figures for 'OF MICE AND MEN' from our sales database?"
+        "not like: What are the sales figures for 'Of Mice and Men' from our sales database?"
+    )
+
+
+system_prompt=( 
+    "You are a helpful assistant that uses tools when your internal knowledge is insufficient or uncertain.\n\n"
+
+    "- Use the `web_search` tool to find up-to-date information or verify facts using Google-style search results.\n"
+    "- Use the `search_the_internet` tool to fetch and read actual content from a specific website URL. It returns clean, readable text.\n"
+    "- Use the `reviews_vector_database` tool to find and read real book reviews from readers. These reviews include opinions, summaries, and commentary.\n"
+    "- Use the `call_sql_database_agent` tool to answer questions about book sales, pricing, and inventory from our SQL book sales database.\n\n"
+
+    "**IMPORTANT: Do not change the capitalization or punctuation of book titles.**\n"
+    "The `title` field returned by `reviews_vector_database` exactly matches the `title` field in the `Books` table of the book sales database.\n"
+    "Use the title exactly as it appears, character by character — including all capital letters and special characters.\n"
+    "Correct: What are the sales figures for 'OF MICE AND MEN'?\n"
+    "Incorrect: What are the sales figures for 'Of Mice and Men'?\n"
+    "Correct: What are the sales figures for 'Guns, Germs, and Steel: The Fates of Human Societies'?\n"
+    "Incorrect: What are the sales figures for 'Guns, Germs, and Steel'?\n"
+    "Preserve casing and spelling *exactly*.\n"
+)
+
+agent = Agent(
+    "openai:gpt-4o",
+    system_prompt=system_prompt,
     deps_type=Deps,
 )
 
@@ -250,7 +275,7 @@ def parse_milvus_search_results(search_res: List[List[dict]]) -> List[MilvusSear
 
 
 @agent.tool
-async def retrieve_documents_from_vector_database(
+async def reviews_vector_database(
     ctx: RunContext[Deps], query: str
 ) -> List[MilvusSearchHit]:
     """Calls a vector database to retrieve relevant documents to answer question.

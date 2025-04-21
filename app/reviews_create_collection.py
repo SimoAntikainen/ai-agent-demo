@@ -17,7 +17,7 @@ DATA_DIR = THIS_DIR / "book_reviews"
 # Milvus/Zilliz config
 ZILLIZ_CLUSTER_ENDPOINT = os.getenv("ZILLIZ_CLUSTER_ENDPOINT")
 ZILLIZ_TOKEN = os.getenv("ZILLIZ_TOKEN")
-COLLECTION_NAME = "balanced_book_reviews"
+COLLECTION_NAME = "book_reviews"
 
 # Embed a sample to determine embedding dimension
 def emb_text(text):
@@ -46,6 +46,7 @@ fields = [
         auto_id=False,
         max_length=200,
     ),
+    FieldSchema(name="productId", dtype=DataType.VARCHAR, max_length=100),
     FieldSchema(name="title", dtype=DataType.VARCHAR, max_length=500),
     FieldSchema(name="authors", dtype=DataType.ARRAY, element_type=DataType.VARCHAR, max_length=100, max_capacity=10),
     FieldSchema(name="category", dtype=DataType.ARRAY, element_type=DataType.VARCHAR, max_length=100, max_capacity=10),
@@ -80,9 +81,9 @@ client.create_collection(
 
 print(f"Collection '{COLLECTION_NAME}' created.")
 
-# Load balanced reviews
+# Load reviews, they should be preprocess by reviews_preprocess.py
 schema_reviews = {
-    "Id": pl.Utf8,
+    "productId": pl.Utf8,
     "Title": pl.Utf8,
     "Price": pl.Utf8,
     "User_id": pl.Utf8,
@@ -134,7 +135,8 @@ for i, row in enumerate(tqdm(reviews_df.iter_rows(named=True), desc="Embedding +
 
         # --- Add to Milvus batch ---
         batch.append({
-            "id": f"{str(row['Id'])}_{i}",
+            "id": f"{str(row['productId'])}_{i}",
+            "productId": str(row["productId"]),
             "title": str(row["Title"]),
             "authors": author_list,
             "category": category_list,
