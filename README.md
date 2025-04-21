@@ -1,16 +1,38 @@
-# ai-agent-demo
+# Books store AI Agent RAG chat
+
+This project demonstrates how you can build an agentic AI RAG
+for an on online book store.
+
+It uses *Pydantic-Ai* agents with *OpenAI GPT-4o*, *Milvus (Zilliz)* for vector search, and *SQLite* for structured book sales data. 
+Agents intelligently route queries to the right tools based on context.
+
+Agent Tools:
+🔍 web_search
+Perform Google-style keyword searches using a Serper API integration.
+
+🌐 search_the_internet
+Scrape and read content from any public website URL. It returns clean, human-readable page content.
+
+💬 reviews_vector_database
+Retrieve real book reviews written by users. These reviews are stored in a vector database (*Zilliz*) and embedded using OpenAI embeddings.
+Reviews include user opinions, summaries, themes, and direct quotes.
+
+📊 call_sql_database_agent
+Query a structured SQL database containing information about books, pricing, stock, and sales data.
+Powered by an internal agent that knows how to construct and run SQL queries against SQLite.
  
 
+
+
 ## Requirements
+
+You need to have *Python 3.10+* installed on your system to install the neccessary packages.
 
 ```
 python -m venv venv
 source venv/bin/activate
 
 pip install -r requirements.txt
-
-
-polars
 ```
 
 
@@ -39,19 +61,19 @@ The dataset is practically a smaller subset of a larget Amazon products dataset.
 https://amazon-reviews-2023.github.io/ 
 
 
-Then follow the underlying steps
+Then follow the underlying steps (first two optional if you use the subset of data found under `app/book_reviews`)
 ```
-# unpack the dataset .csv files under /app/book_reviews
+#1. unpack the dataset .csv files under /app/book_reviews
 unzip archive.zip -d ./app/book_reviews
 
-# select a smaller subset of top books for indexing (feel free to increase the number of reviews/books)
+#2. select a smaller subset of top books for indexing (feel free to increase the number of reviews/books)
 python reviews_preprocess.py
 
-# create a zilliz vector store collection on the reviews
+#3. create a zilliz vector store collection on the reviews
 python reviews_create_collection.py
 
-# ask a question on the dataset to check that everything is working correctly
-python reviews_analyze.py "What do readers think about the ending of Of Mice and Men?"
+#4. ask a question on the dataset to check that everything is working correctly
+python reviews_analyze.py "How do readers feel about 1984?"
 ```
 
 After that create fake sales data to be queried by the sql agent
@@ -67,6 +89,9 @@ Then Run the agent with
 uvicorn app.chat_app_backend:app --reload
 ```
 
+Then you can view the ai agent chat at http://localhost:8000/ 
+
+Openapi documentation is also available at http://localhost:8000/docs 
 
 
 
@@ -76,11 +101,17 @@ uvicorn app.chat_app_backend:app --reload
 # Misc
 
 Info on techology choices:
+* https://simmering.dev/blog/pydantic-ai/
+* https://www.reddit.com/r/LangChain/comments/1ji4d2k/langgraph_vs_pydantic_ai/ 
 * https://datasystemreviews.com/best-open-source-vector-databases.html
 
 
+Docs:
+* https://ai.pydantic.dev/ 
+* Milvus/zilliz:
+* * https://milvus.io/docs/quickstart.md 
+* * https://docs.zilliz.com/docs/quick-start
 
 
-##
 
-* Use reranker on the sql tables metadata https://jina.ai/reranker/
+
