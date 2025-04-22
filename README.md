@@ -8,14 +8,14 @@ Agents intelligently route queries to the right tools based on context.
 
 Agent Tools:
 
-* 🔍 web_search: Perform Google-style keyword searches using a Serper API integration.
+* web_search: Perform Google-style keyword searches using a Serper API integration.
 
-* 🌐 search_the_internet: Scrape and read content from any public website URL. It returns clean, human-readable page content.
+*  search_the_internet: Scrape and read content from URLs. It returns clean, human-readable page content.
 
-* 💬 reviews_vector_database: Retrieve real book reviews written by users. These reviews are stored in a vector database (*Zilliz*) and embedded using OpenAI embeddings.
+* reviews_vector_database: Retrieve book reviews from [a Amazon book reviews dataset](https://www.kaggle.com/datasets/mohamedbakhet/amazon-books-reviews). These reviews are stored in a vector database (*Zilliz*) and embedded using OpenAI embeddings.
 Reviews include user opinions, summaries, themes, and direct quotes.
 
-* 📊 call_sql_database_agent: Query a SQL database containing information about books, pricing, stock, and sales data.
+* call_sql_database_agent: Query a SQL database containing information about books, pricing, stock, and sales data.
 Powered by an internal agent that knows how to construct and run SQL queries against SQLite.
  
 ![Example usage](./prompt.PNG)
