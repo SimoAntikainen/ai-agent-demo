@@ -67,7 +67,7 @@
   // and transpile the TypeScript code in the browser
   // this is (arguably) A neat demo trick, but not suitable for production!
   async function loadTs() {
-    const response = await fetch('/chat_app.ts');
+    const response = await fetch(`/chat_app.ts?ts=${Date.now()}`);
     const tsCode = await response.text();
     const jsCode = window.ts.transpile(tsCode, { target: "es2015" });
     let script = document.createElement('script');
