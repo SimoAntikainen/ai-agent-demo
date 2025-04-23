@@ -108,10 +108,13 @@ Docs:
 
 # TODOs
 
-The created mock database from the reviews, makes for a fun demo of how to prompt sql via an llm, but its
-structure does not allow for much compilexity in the queries. You might have to scrape you own dataset to get
+The created mock database from the reviews makes for a fun demo of how to prompt sql via an llm, but its
+structure does not allow for much query complexity. You might have to scrape you own dataset to get
 a better demo. Related to it, here are some problems to solve:
 * Books with slight title differences (e.g., "Of Mice and Men" vs. "Of Mice & Men") are treated as separate entities.
 * Add fields like format, language, or edition to simulate a more realistic product catalog and enable richer queries.
 * Categories are currently stored as comma-separated strings, making them hard to filter or aggregate. 
 * give more context to sql tables, attach examples of return table rows.
+
+Also, there is some validation for prompt injection, but you might want to try If you can get the LLM to execute some other operations than `SELECT` on the
+database, for example, modify it.
