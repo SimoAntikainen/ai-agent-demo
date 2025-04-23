@@ -86,6 +86,9 @@ balanced_reviews_with_meta = balanced_reviews.join(
     how="left"
 )
 
+columns = ["productId"] + [col for col in balanced_books.columns if col != "productId"]
+balanced_books = balanced_books.select(columns)
+
 # Step 8: Save results
 balanced_reviews_with_meta.write_csv(DATA_DIR / "balanced_reviews.csv")
 balanced_books.write_csv(DATA_DIR / "balanced_books.csv")
